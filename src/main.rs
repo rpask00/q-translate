@@ -3,7 +3,6 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 
-
 /// # Description
 ///
 /// This tool recreates an existing translation file by automatically translating all text values into a chosen target language.
@@ -21,17 +20,24 @@ use std::io::Write;
 /// - Outputs a fully reconstructed file in the target language
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let SOURCE_LANG = "pl";
-    let TARGET_LANG = "ua";
+    let source_lang = "pl";
+    let target_lang = "es";
 
-    let source_json =
-        serde_json::from_str(&fs::read_to_string(format!("assets/{SOURCE_LANG}.json"))?)?;
-    let mut target_json =
-        serde_json::from_str(&fs::read_to_string(format!("assets/{TARGET_LANG}.json"))?)?;
+    let source_path = format!("assets/{source_lang}.json");
+    let target_path = format!("assets/{target_lang}.json");
 
-    utils::traverse(&source_json, &mut target_json, None, 0, TARGET_LANG).await;
+    let source_json = serde_json::from_str(&fs::read_to_string(source_path)?)?;
 
-    let mut target_file = File::create("assets/ua.json")?;
+    if !fs::exists(&target_path)? {
+        let mut target_file = File::create_new(&target_path)?;
+        target_file.write_all("{}".as_bytes())?;
+    }
+
+    let mut target_json = serde_json::from_str(&fs::read_to_string(&target_path)?)?;
+
+    utils::traverse(&source_json, &mut target_json, None, 0, target_lang).await;
+
+    let mut target_file = File::create(&target_path)?;
     target_file.write_all(serde_json::to_string_pretty(&target_json)?.as_bytes())?;
 
     Ok(())
