@@ -3,6 +3,22 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 
+
+/// # Description
+///
+/// This tool recreates an existing translation file by automatically translating all text values into a chosen target language.
+///
+/// It reads a structured JSON file (for example, an i18n resource file), walks through it recursively, and produces a new file with the same structure and key order. All string values are translated into the target language, while non-string values (numbers, booleans, arrays, nulls) are preserved as-is.
+///
+/// The result is a ready-to-use translation file that mirrors the original exactly, but with all human-readable text translated.
+///
+/// # What the tool does
+///
+/// - Preserves the original JSON structure and nesting
+/// - Keeps key insertion order intact
+/// - Translates only string values
+/// - Copies non-string values without modification
+/// - Outputs a fully reconstructed file in the target language
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let SOURCE_LANG = "pl";
