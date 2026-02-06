@@ -19,7 +19,41 @@ struct Translation {
     translated_text: String,
 }
 
-/// Translate given phrase to target language using Google API.
+/// Translates a text string into the target language using Google Translate API.
+///
+/// This function sends a request to the Google Translate v2 API and returns
+/// the translated text. The API key must be provided via the
+/// `GOOGLE_TRANSLATE_API_KEY` environment variable (for example using a `.env` file).
+///
+/// # Arguments
+///
+/// * `text` - The text to translate
+/// * `target_lang` - Target language code (e.g. `"en"`, `"de"`, `"pl"`)
+///
+/// # Returns
+///
+/// Returns the translated text on success.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The HTTP request fails
+/// - The API responds with a non-success status
+/// - The response body cannot be parsed
+///
+/// # Panics
+///
+/// Panics if the `GOOGLE_TRANSLATE_API_KEY` environment variable is not set.
+///
+/// # Examples
+///
+/// ```no_run
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let translated = translate_phrase("Hallo Welt", "en").await?;
+/// assert_eq!(translated, "Hello world");
+/// # Ok(())
+/// # }
+/// ```
 pub async fn translate_phrase(
     text: &str,
     target_lang: &str,
