@@ -1,0 +1,50 @@
+{
+  "home": {
+    "breadcrumbs": {
+      "dashboard": "Panel główny",
+      "service": "Serwis",
+      "users": "Edycja użytkownika",
+      "configurator": "Konfigurator",
+      "admin": "Administracja",
+      "registry": "Rejestry",
+      "registryForm": "Formularze",
+      "charts": "Pulpity",
+      "tiles": "Pulpity",
+      "reports": "Sprawozdania",
+      "soTiles": "Sprawozdania",
+      "workflows": "Przepływy"
+    }
+  },
+  "common": {
+    "turnOff": "Wyłącz",
+    "turnOn": "Włącz",
+    "turnedOff": "Wyłączony",
+    "turnedOn": "Włączony",
+    "turnedOff2": "Wyłączona",
+    "turnedOn2": "Włączona",
+    "turnedOff3": "Wyłączone",
+    "turnedOn3": "Włączone",
+    "status": "Status",
+    "Data": "Dane",
+    "notificationStatus": "Status powiadomienia",
+    "registryStatus": "Status rejestru",
+    "inactive": "Nieaktywny",
+    "inactive2": "Nieaktywna",
+    "active": "Aktywny",
+    "name": "Nazwa",
+    "description": "Opis",
+    "settings": "Ustawienia",
+    "browse": "Przeglądaj",
+    "active2": "Aktywna",
+    "archived": "Zarchiwizowany"
+  },
+  "language": {
+    "language": "Język",
+    "systemLanguage": "Język systemowy",
+    "pl": "Polski",
+    "ua": "Ukraiński",
+    "en": "Angielski",
+    "ru": "Rosyjski",
+    "de": "Niemiecki"
+  }
+}
