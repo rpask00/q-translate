@@ -60,18 +60,14 @@ pub async fn translate_phrase(
 ) -> Result<String, Box<dyn std::error::Error>> {
     dotenv().ok();
 
-    let api_key = env::var("GOOGLE_TRANSLATE_API_KEY").expect("GOOGLE_TRANSLATE_API_KEY not provided in .env file.");
+    let api_key = env!("GOOGLE_TRANSLATE_API_KEY");
 
     let client = Client::new();
     let url = "https://translation.googleapis.com/language/translate/v2";
 
     let response = client
         .post(url)
-        .query(&[
-            ("key", api_key.as_str()),
-            ("q", text),
-            ("target", target_lang),
-        ])
+        .query(&[("key", api_key), ("q", text), ("target", target_lang)])
         .send()
         .await?
         .error_for_status()?
