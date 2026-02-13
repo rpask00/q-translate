@@ -28,12 +28,10 @@ async fn main() -> std::io::Result<()> {
 
     let source_json = serde_json::from_str(&fs::read_to_string(source_path)?)?;
 
-    if !fs::exists(&target_path)? {
-        let mut target_file = File::create_new(&target_path)?;
-        target_file.write_all("{}".as_bytes())?;
-    }
-
-    let mut target_json = serde_json::from_str(&fs::read_to_string(&target_path)?)?;
+    let mut target_json = match fs::exists(&target_path)? {
+        true => serde_json::from_str(&fs::read_to_string(&target_path)?)?,
+        false => serde_json::from_str("{}")?,
+    };
 
     utils::traverse(&source_json, &mut target_json, None, 0, target_lang).await;
 
