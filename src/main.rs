@@ -1,6 +1,5 @@
 use clap::Parser;
 use q_translate::utils;
-use q_translate::utils::{gather_translations, perform_translations};
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
@@ -58,10 +57,9 @@ async fn main() -> std::io::Result<()> {
 
     let mut translations: HashMap<String, String> = HashMap::default();
 
-    gather_translations(&source_json, &mut translations);
-    perform_translations(&mut translations, &args.target_lang).await.unwrap();
-
-    utils::traverse(&source_json, &mut target_json, None, 0, &args.target_lang, &translations);
+    utils::gather_translations(&source_json, &mut target_json, None, &args.target_lang, &mut translations);
+    utils::perform_translations(&mut translations, &args.target_lang).await.unwrap();
+    utils::apply_translations(&source_json, &mut target_json, None, 0, &args.target_lang, &translations);
 
     let mut target_file = File::create(&target_path)?;
     target_file.write_all(serde_json::to_string_pretty(&target_json)?.as_bytes())?;

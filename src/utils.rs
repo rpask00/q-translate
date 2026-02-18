@@ -1,5 +1,5 @@
-use crate::translate::{translate_phrases};
-use serde_json::{json, Map, Value};
+use crate::translate::translate_phrases;
+use serde_json::{Map, Value, json};
 use std::cmp::min;
 use std::collections::HashMap;
 
@@ -20,6 +20,7 @@ use std::collections::HashMap;
 /// * `key` - The key under which the current value should be inserted
 /// * `index` - Position at which the value should be inserted in the target object
 /// * `target_lang` - Target language code used for string translation
+/// * `translations` - HashMap with translated phrases
 ///
 /// # Panics
 ///
@@ -32,7 +33,7 @@ use std::collections::HashMap;
 ///
 /// This function performs asynchronous network calls when translating string
 /// values. Recursive calls are explicitly boxed to allow async recursion.
-pub fn traverse(
+pub fn apply_translations(
     source: &Value,
     mut target: &mut Map<String, Value>,
     key: Option<&String>,
@@ -43,14 +44,11 @@ pub fn traverse(
     match source {
         Value::Object(value) => {
             if let Some(key) = key {
-                if target.get(key).is_none() {
-                    target.insert(key.to_owned(), json!({}));
-                }
                 target = target.get_mut(key).unwrap().as_object_mut().unwrap()
             }
 
             for (i, (key, v)) in value.iter().enumerate() {
-                traverse(v, &mut target, Some(key), i, target_lang, translations)
+                apply_translations(v, &mut target, Some(key), i, target_lang, translations)
             }
         }
         Value::String(value) => {
@@ -72,28 +70,82 @@ pub fn traverse(
         }
     }
 }
-pub fn gather_translations(source: &Value, translations: &mut HashMap<String, String>) {
+
+
+/// Recursively traverses a source JSON structure and collects translation
+/// entries for all string values.
+///
+/// The function mirrors the object structure from `source` into `target`,
+/// creating missing intermediate objects as needed.
+///
+/// For each string in `source`:
+/// - If a corresponding value exists in `target`, it is inserted into
+///   `translations`.
+/// - Otherwise, an empty string is inserted as a placeholder.
+///
+/// Non-object and non-string values are ignored.
+///
+/// # Panics
+/// May panic if `key` is `None` when processing a string
+/// or if the target structure is not an object where expected.
+pub fn gather_translations(
+    source: &Value,
+    mut target: &mut Map<String, Value>,
+    key: Option<&String>,
+    target_lang: &str,
+    translations: &mut HashMap<String, String>,
+) {
     match source {
         Value::Object(value) => {
-            for (i, (key, v)) in value.iter().enumerate() {
-                gather_translations(v, translations)
+            if let Some(key) = key {
+                if target.get(key).is_none() {
+                    target.insert(key.to_owned(), json!({}));
+                }
+                target = target.get_mut(key).unwrap().as_object_mut().unwrap()
+            }
+
+            for (key, v) in value.iter() {
+                gather_translations(v, &mut target, Some(key), target_lang, translations)
             }
         }
-        Value::String(value) => {
-            translations.insert(value.clone(), "".to_string());
-        }
+        Value::String(value) => match target.get(&key.unwrap().to_owned()) {
+            None => {
+                translations.insert(value.clone(), "".to_string());
+            }
+            Some(target_value) => {
+                translations.insert(value.clone(), target_value.to_string());
+            }
+        },
         _ => {}
     }
 }
 
+
+/// Translates all missing entries in the provided `translations` map.
+///
+/// Collects phrases whose translation value is empty (`""`), sends them
+/// in batches to `translate_phrases`, and updates the map with the
+/// returned translations.
+///
+/// Translations are processed in batches of 128 for the most effective API usage.
+///
+/// # Errors
+/// Returns an error if the underlying translation request fails.
+///
+/// # Behavior
+/// - Only entries with empty values are translated.
+/// - The `translations` map is updated in place.
+/// - Already translated entries are skipped.
 pub async fn perform_translations(
     translations: &mut HashMap<String, String>,
     target_lang: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut phrases = vec![];
 
-    for key in translations.keys() {
-        phrases.push(key.to_owned());
+    for (phrase, translated_phrase) in translations.iter() {
+        if *translated_phrase == String::from("") {
+            phrases.push(phrase.to_owned());
+        }
     }
 
     let batch_size = 128;
