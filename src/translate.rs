@@ -57,7 +57,7 @@ struct Translation {
 /// ```
 
 pub async fn translate_phrases(
-    texts: Vec<String>,
+    texts: &Vec<String>,
     target_lang: &str,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     dotenv().ok();
@@ -72,7 +72,7 @@ pub async fn translate_phrases(
     ];
 
     for text in texts {
-        params.push(("q", text));
+        params.push(("q", text.to_owned()));
     }
 
     let response = client
