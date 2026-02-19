@@ -59,7 +59,7 @@ async fn main() -> std::io::Result<()> {
 
     utils::gather_translations(&source_json, &mut target_json, &String::default(), &args.target_lang, &mut translations);
     utils::perform_translations(&mut translations, &args.target_lang).await.unwrap();
-    utils::apply_translations(&source_json, &mut target_json, None, 0, &args.target_lang, &translations);
+    utils::apply_translations(&source_json, &mut target_json, &String::default(), 0, &args.target_lang, &translations);
 
     let mut target_file = File::create(&target_path)?;
     target_file.write_all(serde_json::to_string_pretty(&target_json)?.as_bytes())?;

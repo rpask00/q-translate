@@ -36,24 +36,23 @@ use std::collections::HashMap;
 pub fn apply_translations(
     source: &Value,
     mut target: &mut Map<String, Value>,
-    key: Option<&String>,
+    key: &String,
     index: usize,
     target_lang: &str,
     translations: &HashMap<String, String>,
 ) {
     match source {
         Value::Object(value) => {
-            if let Some(key) = key {
+            if !key.is_empty() {
                 target = target.get_mut(key).unwrap().as_object_mut().unwrap()
             }
 
             for (i, (key, v)) in value.iter().enumerate() {
-                apply_translations(v, &mut target, Some(key), i, target_lang, translations)
+                apply_translations(v, &mut target, key, i, target_lang, translations)
             }
         }
         Value::String(value) => {
-            let key = key.unwrap().to_owned();
-            if target.get(&key).is_none() {
+            if target.get(key).is_none() {
                 let translated = translations
                     .get(value)
                     .expect(format!("Translation for phrase {}, not found!", value).as_str());
@@ -63,8 +62,7 @@ pub fn apply_translations(
         }
         other => {
             // if  Null, Bool, Number or Array - simply clone;
-            let key = key.unwrap().to_owned();
-            if target.get(&key).is_none() {
+            if target.get(key).is_none() {
                 insert_at(target, index, key, other.to_owned())
             }
         }
@@ -194,11 +192,11 @@ pub async fn perform_translations(
 /// let keys: Vec<_> = map.keys().cloned().collect();
 /// assert_eq!(keys, vec!["a", "x", "b"]);
 /// ```
-fn insert_at(map: &mut Map<String, Value>, index: usize, key: String, value: Value) {
+fn insert_at(map: &mut Map<String, Value>, index: usize, key: &String, value: Value) {
     let old = std::mem::take(map);
 
     let mut entries: Vec<_> = old.into_iter().collect();
-    entries.insert(index, (key, value));
+    entries.insert(index, (key.to_owned(), value));
 
     *map = entries.into_iter().collect();
 }
