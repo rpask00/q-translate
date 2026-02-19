@@ -43,9 +43,7 @@ pub fn apply_translations(
 ) {
     match source {
         Value::Object(value) => {
-            if !key.is_empty() {
-                target = target.get_mut(key).unwrap().as_object_mut().unwrap()
-            }
+            target = extract_or_instantiate_object_under_key(target, key);
 
             for (i, (key, v)) in value.iter().enumerate() {
                 apply_translations(v, &mut target, key, i, target_lang, translations)
@@ -68,7 +66,6 @@ pub fn apply_translations(
         }
     }
 }
-
 
 /// Recursively traverses a source JSON structure and collects translation
 /// entries for all string values.
@@ -95,12 +92,7 @@ pub fn gather_translations(
 ) {
     match source {
         Value::Object(value) => {
-            if !key.is_empty() {
-                if target.get(key).is_none() {
-                    target.insert(key.to_owned(), json!({}));
-                }
-                target = target.get_mut(key).unwrap().as_object_mut().unwrap()
-            }
+            target = extract_or_instantiate_object_under_key(target, key);
 
             for (key, v) in value.iter() {
                 gather_translations(v, &mut target, key, target_lang, translations)
@@ -117,7 +109,6 @@ pub fn gather_translations(
         _ => {}
     }
 }
-
 
 /// Translates all missing entries in the provided `translations` map.
 ///
@@ -160,6 +151,65 @@ pub async fn perform_translations(
     }
 
     Ok(())
+}
+
+/// Returns a mutable reference to a JSON object stored under the given `key`.
+///
+/// If the key does not exist in `target`, a new empty JSON object is inserted.
+/// If the key exists but the value is not a JSON object, it will be replaced
+/// with a new empty object.
+///
+/// If `key` is empty, the function returns `target` unchanged.
+///
+/// # Behavior
+///
+/// - Ensures that `target[key]` exists and is a JSON object.
+/// - Overwrites non-object values under the key.
+/// - Never returns `None`.
+///
+/// # Arguments
+///
+/// * `target` - The parent JSON object (`serde_json::Map`) to operate on.
+/// * `key` - The key under which an object should exist.
+///
+/// # Returns
+///
+/// A mutable reference to the JSON object stored under `key`,
+/// or to `target` itself if `key` is empty.
+///
+/// # Example
+///
+/// ```rust
+/// use serde_json::{Map, Value};
+///
+/// let mut root = Map::new();
+///
+/// let child = extract_or_instantiate_object_under_key(
+///     &mut root,
+///     &"config".to_string(),
+/// );
+///
+/// child.insert("enabled".to_string(), Value::Bool(true));
+///
+/// assert!(root["config"].is_object());
+/// ```
+fn extract_or_instantiate_object_under_key<'a>(
+    target: &'a mut Map<String, Value>,
+    key: &String,
+) -> &'a mut Map<String, Value> {
+    if key.is_empty() {
+        return target;
+    }
+
+    let value = target
+        .entry(key.to_owned())
+        .or_insert_with(|| Value::Object(Map::new()));
+
+    if !value.is_object() {
+        *value = Value::Object(Map::new());
+    }
+
+    value.as_object_mut().unwrap()
 }
 
 /// Inserts a key–value pair into a [`serde_json::Map`] at the given position.
