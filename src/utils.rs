@@ -91,13 +91,13 @@ pub fn apply_translations(
 pub fn gather_translations(
     source: &Value,
     mut target: &mut Map<String, Value>,
-    key: Option<&String>,
+    key: &String,
     target_lang: &str,
     translations: &mut HashMap<String, String>,
 ) {
     match source {
         Value::Object(value) => {
-            if let Some(key) = key {
+            if !key.is_empty() {
                 if target.get(key).is_none() {
                     target.insert(key.to_owned(), json!({}));
                 }
@@ -105,12 +105,12 @@ pub fn gather_translations(
             }
 
             for (key, v) in value.iter() {
-                gather_translations(v, &mut target, Some(key), target_lang, translations)
+                gather_translations(v, &mut target, key, target_lang, translations)
             }
         }
-        Value::String(value) => match target.get(&key.unwrap().to_owned()) {
+        Value::String(value) => match target.get(key) {
             None => {
-                translations.insert(value.clone(), "".to_string());
+                translations.insert(value.clone(), String::default());
             }
             Some(target_value) => {
                 translations.insert(value.clone(), target_value.to_string());
@@ -143,7 +143,7 @@ pub async fn perform_translations(
     let mut phrases = vec![];
 
     for (phrase, translated_phrase) in translations.iter() {
-        if *translated_phrase == String::from("") {
+        if *translated_phrase == String::default() {
             phrases.push(phrase.to_owned());
         }
     }

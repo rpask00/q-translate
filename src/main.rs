@@ -57,7 +57,7 @@ async fn main() -> std::io::Result<()> {
 
     let mut translations: HashMap<String, String> = HashMap::default();
 
-    utils::gather_translations(&source_json, &mut target_json, None, &args.target_lang, &mut translations);
+    utils::gather_translations(&source_json, &mut target_json, &String::default(), &args.target_lang, &mut translations);
     utils::perform_translations(&mut translations, &args.target_lang).await.unwrap();
     utils::apply_translations(&source_json, &mut target_json, None, 0, &args.target_lang, &translations);
 
