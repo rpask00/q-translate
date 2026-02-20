@@ -1,7 +1,18 @@
+use clap::Parser;
 use q_translate::utils;
+use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
+
+#[derive(Parser)]
+struct Args {
+    #[arg(short, long)]
+    source_lang: String,
+
+    #[arg(short, long)]
+    target_lang: String,
+}
 
 /// # Description
 ///
@@ -20,22 +31,35 @@ use std::io::Write;
 /// - Outputs a fully reconstructed file in the target language
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let source_lang = "pl";
-    let target_lang = "es";
+    let args = Args::parse();
 
-    let source_path = format!("assets/{source_lang}.json");
-    let target_path = format!("assets/{target_lang}.json");
+    let assets_path = if fs::exists("src/assets")? {
+        "src/assets/i18n"
+    } else if fs::exists("assets")? {
+        "assets/i18n"
+    } else {
+        panic!("Assets directory not found!");
+    };
+
+    let source_path = format!("{}/{}.json", assets_path, args.source_lang);
+    let target_path = format!("{}/{}.json", assets_path, args.target_lang);
+
+    if !fs::exists(&source_path)? {
+        panic!("Source file {} does not exists!", source_path);
+    }
 
     let source_json = serde_json::from_str(&fs::read_to_string(source_path)?)?;
 
-    if !fs::exists(&target_path)? {
-        let mut target_file = File::create_new(&target_path)?;
-        target_file.write_all("{}".as_bytes())?;
-    }
+    let mut target_json = match fs::exists(&target_path)? {
+        true => serde_json::from_str(&fs::read_to_string(&target_path)?)?,
+        false => serde_json::from_str("{}")?,
+    };
 
-    let mut target_json = serde_json::from_str(&fs::read_to_string(&target_path)?)?;
+    let mut translations: HashMap<String, String> = HashMap::default();
 
-    utils::traverse(&source_json, &mut target_json, None, 0, target_lang).await;
+    utils::gather_translations(&source_json, &mut target_json, None, &args.target_lang, &mut translations);
+    utils::perform_translations(&mut translations, &args.target_lang).await.unwrap();
+    utils::apply_translations(&source_json, &mut target_json, None, 0, &args.target_lang, &translations);
 
     let mut target_file = File::create(&target_path)?;
     target_file.write_all(serde_json::to_string_pretty(&target_json)?.as_bytes())?;

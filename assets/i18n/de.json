@@ -1,0 +1,50 @@
+{
+  "home": {
+    "breadcrumbs": {
+      "dashboard": "Hauptpanel",
+      "service": "Service",
+      "users": "Benutzerbearbeitung",
+      "configurator": "Konfigurator",
+      "admin": "Verwaltung",
+      "registry": "Register",
+      "registryForm": "Formulare",
+      "charts": "Fruchtbarkeit",
+      "tiles": "Fruchtbarkeit",
+      "reports": "Berichte",
+      "soTiles": "Berichte",
+      "workflows": "Flüsse"
+    }
+  },
+  "common": {
+    "turnOff": "Ausschalten",
+    "turnOn": "Einschalten",
+    "turnedOff": "Aus",
+    "turnedOn": "An",
+    "turnedOff2": "Ausgeschaltet",
+    "turnedOn2": "An",
+    "turnedOff3": "Deaktiviert",
+    "turnedOn3": "An",
+    "status": "Status",
+    "Data": "Däne",
+    "notificationStatus": "Benachrichtigungsstatus",
+    "registryStatus": "Registrierungsstatus",
+    "inactive": "Inaktiv",
+    "inactive2": "Inaktiv",
+    "active": "Aktiv",
+    "name": "Name",
+    "description": "Beschreibung",
+    "settings": "Einstellungen",
+    "browse": "Durchsuchen",
+    "active2": "Aktiv",
+    "archived": "Archiviert"
+  },
+  "language": {
+    "language": "Zunge",
+    "systemLanguage": "Systemsprache",
+    "pl": "Polieren",
+    "ua": "ukrainisch",
+    "en": "Englisch",
+    "ru": "Russisch",
+    "de": "Deutsch"
+  }
+}

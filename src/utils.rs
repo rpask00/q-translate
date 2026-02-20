@@ -1,5 +1,7 @@
-use serde_json::{json, Map, Value};
-use crate::translate::translate_phrase;
+use crate::translate::translate_phrases;
+use serde_json::{Map, Value, json};
+use std::cmp::min;
+use std::collections::HashMap;
 
 /// Recursively walks a JSON value and builds a translated target structure.
 ///
@@ -18,6 +20,7 @@ use crate::translate::translate_phrase;
 /// * `key` - The key under which the current value should be inserted
 /// * `index` - Position at which the value should be inserted in the target object
 /// * `target_lang` - Target language code used for string translation
+/// * `translations` - HashMap with translated phrases
 ///
 /// # Panics
 ///
@@ -30,12 +33,67 @@ use crate::translate::translate_phrase;
 ///
 /// This function performs asynchronous network calls when translating string
 /// values. Recursive calls are explicitly boxed to allow async recursion.
-pub async fn traverse(
+pub fn apply_translations(
     source: &Value,
     mut target: &mut Map<String, Value>,
     key: Option<&String>,
     index: usize,
     target_lang: &str,
+    translations: &HashMap<String, String>,
+) {
+    match source {
+        Value::Object(value) => {
+            if let Some(key) = key {
+                target = target.get_mut(key).unwrap().as_object_mut().unwrap()
+            }
+
+            for (i, (key, v)) in value.iter().enumerate() {
+                apply_translations(v, &mut target, Some(key), i, target_lang, translations)
+            }
+        }
+        Value::String(value) => {
+            let key = key.unwrap().to_owned();
+            if target.get(&key).is_none() {
+                let translated = translations
+                    .get(value)
+                    .expect(format!("Translation for phrase {}, not found!", value).as_str());
+
+                insert_at(target, index, key, json!(translated))
+            }
+        }
+        other => {
+            // if  Null, Bool, Number or Array - simply clone;
+            let key = key.unwrap().to_owned();
+            if target.get(&key).is_none() {
+                insert_at(target, index, key, other.to_owned())
+            }
+        }
+    }
+}
+
+
+/// Recursively traverses a source JSON structure and collects translation
+/// entries for all string values.
+///
+/// The function mirrors the object structure from `source` into `target`,
+/// creating missing intermediate objects as needed.
+///
+/// For each string in `source`:
+/// - If a corresponding value exists in `target`, it is inserted into
+///   `translations`.
+/// - Otherwise, an empty string is inserted as a placeholder.
+///
+/// Non-object and non-string values are ignored.
+///
+/// # Panics
+/// May panic if `key` is `None` when processing a string
+/// or if the target structure is not an object where expected.
+pub fn gather_translations(
+    source: &Value,
+    mut target: &mut Map<String, Value>,
+    key: Option<&String>,
+    target_lang: &str,
+    translations: &mut HashMap<String, String>,
 ) {
     match source {
         Value::Object(value) => {
@@ -46,25 +104,64 @@ pub async fn traverse(
                 target = target.get_mut(key).unwrap().as_object_mut().unwrap()
             }
 
-            for (i, (key, v)) in value.iter().enumerate() {
-                Box::pin(traverse(v, &mut target, Some(key), i, target_lang)).await
+            for (key, v) in value.iter() {
+                gather_translations(v, &mut target, Some(key), target_lang, translations)
             }
         }
-        Value::String(value) => {
-            let key = key.unwrap().to_owned();
-            if target.get(&key).is_none() {
-                let translated = translate_phrase(value, target_lang).await.unwrap();
-                insert_at(target, index, key, json!(translated))
+        Value::String(value) => match target.get(&key.unwrap().to_owned()) {
+            None => {
+                translations.insert(value.clone(), "".to_string());
+            }
+            Some(target_value) => {
+                translations.insert(value.clone(), target_value.to_string());
             }
         },
-        other => {
-            // if  Null, Bool, Number or Array - simply clone; 
-            let key = key.unwrap().to_owned();
-            if target.get(&key).is_none() {
-                insert_at(target, index, key, other.to_owned())
-            }
-        },
+        _ => {}
     }
+}
+
+
+/// Translates all missing entries in the provided `translations` map.
+///
+/// Collects phrases whose translation value is empty (`""`), sends them
+/// in batches to `translate_phrases`, and updates the map with the
+/// returned translations.
+///
+/// Translations are processed in batches of 128 for the most effective API usage.
+///
+/// # Errors
+/// Returns an error if the underlying translation request fails.
+///
+/// # Behavior
+/// - Only entries with empty values are translated.
+/// - The `translations` map is updated in place.
+/// - Already translated entries are skipped.
+pub async fn perform_translations(
+    translations: &mut HashMap<String, String>,
+    target_lang: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut phrases = vec![];
+
+    for (phrase, translated_phrase) in translations.iter() {
+        if *translated_phrase == String::from("") {
+            phrases.push(phrase.to_owned());
+        }
+    }
+
+    let batch_size = 128;
+    while phrases.len() > 0 {
+        let mut batch = phrases
+            .splice(0..min(phrases.len(), batch_size), vec![])
+            .collect();
+
+        let mut translated = translate_phrases(&batch, target_lang).await?;
+
+        for _ in 0..translated.len() {
+            translations.insert(batch.pop().unwrap(), translated.pop().unwrap());
+        }
+    }
+
+    Ok(())
 }
 
 /// Inserts a key–value pair into a [`serde_json::Map`] at the given position.
