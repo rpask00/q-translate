@@ -101,7 +101,20 @@ pub async fn translate_phrases(
 }
 
 
-
+/// Translates a collection of phrases into the target language using a concurrent stream.
+///
+/// This function optimizes API usage by:
+/// * **Batching**: Grouping phrases into chunks of 128 (Google API limit).
+/// * **Concurrency**: Executing up to 5 translation requests simultaneously.
+/// * **Ordering**: Uses `buffer_unordered` for maximum throughput; results are emitted as soon as they are ready.
+///
+/// # Arguments
+/// * `phrases` - A vector of strings to be translated.
+/// * `target_lang` - Target language code (e.g., "en", "pl").
+///
+/// # Returns
+/// A `Stream` of `(original, translated)` string pairs. If a batch fails,
+/// the second element will contain `"Error"`.
 pub fn translate_stream(
     phrases: Vec<String>,
     target_lang: String,
