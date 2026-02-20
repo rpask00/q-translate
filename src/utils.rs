@@ -1,6 +1,6 @@
-use crate::translate::translate_phrases;
-use serde_json::{Map, Value, json};
-use std::cmp::min;
+use crate::translate::translate_stream;
+use futures::StreamExt;
+use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
 /// Recursively walks a JSON value and builds a translated target structure.
@@ -137,19 +137,11 @@ pub async fn perform_translations(
         }
     }
 
-    let batch_size = 128;
-    while phrases.len() > 0 {
-        let mut batch = phrases
-            .splice(0..min(phrases.len(), batch_size), vec![])
-            .collect();
 
-        let mut translated = translate_phrases(&batch, target_lang).await?;
-
-        for _ in 0..translated.len() {
-            translations.insert(batch.pop().unwrap(), translated.pop().unwrap());
-        }
+    let mut stream = translate_stream(phrases, target_lang.to_string());
+    while let Some((phrase,translated_phrase)) = stream.next().await {
+        translations.insert(phrase, translated_phrase);
     }
-
     Ok(())
 }
 
