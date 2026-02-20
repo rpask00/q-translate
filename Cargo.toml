@@ -12,3 +12,4 @@ dotenv = "0.15.0"
 clap = { version = "4.5.58", features = ["derive"] }
 futures = "0.3.32"
 itertools = "0.14.0"
+log = "0.4.29"

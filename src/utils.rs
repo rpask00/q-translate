@@ -103,6 +103,7 @@ pub fn gather_translations(
                 translations.insert(value.clone(), String::default());
             }
             Some(target_value) => {
+                let target_value = target_value.as_str().expect(format!("Value {target_value} is not a String").as_str());
                 translations.insert(value.clone(), target_value.to_string());
             }
         },

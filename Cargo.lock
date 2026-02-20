@@ -895,6 +895,7 @@ dependencies = [
  "dotenv",
  "futures",
  "itertools",
+ "log",
  "reqwest",
  "serde",
  "serde_json",
