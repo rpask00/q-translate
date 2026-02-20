@@ -1,6 +1,6 @@
-use crate::translate::translate_phrases;
-use serde_json::{Map, Value, json};
-use std::cmp::min;
+use crate::translate::translate_stream;
+use futures::StreamExt;
+use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
 /// Recursively walks a JSON value and builds a translated target structure.
@@ -36,24 +36,21 @@ use std::collections::HashMap;
 pub fn apply_translations(
     source: &Value,
     mut target: &mut Map<String, Value>,
-    key: Option<&String>,
+    key: &String,
     index: usize,
     target_lang: &str,
     translations: &HashMap<String, String>,
 ) {
     match source {
         Value::Object(value) => {
-            if let Some(key) = key {
-                target = target.get_mut(key).unwrap().as_object_mut().unwrap()
-            }
+            target = extract_or_instantiate_object_under_key(target, key);
 
             for (i, (key, v)) in value.iter().enumerate() {
-                apply_translations(v, &mut target, Some(key), i, target_lang, translations)
+                apply_translations(v, &mut target, key, i, target_lang, translations)
             }
         }
         Value::String(value) => {
-            let key = key.unwrap().to_owned();
-            if target.get(&key).is_none() {
+            if target.get(key).is_none() {
                 let translated = translations
                     .get(value)
                     .expect(format!("Translation for phrase {}, not found!", value).as_str());
@@ -63,14 +60,12 @@ pub fn apply_translations(
         }
         other => {
             // if  Null, Bool, Number or Array - simply clone;
-            let key = key.unwrap().to_owned();
-            if target.get(&key).is_none() {
+            if target.get(key).is_none() {
                 insert_at(target, index, key, other.to_owned())
             }
         }
     }
 }
-
 
 /// Recursively traverses a source JSON structure and collects translation
 /// entries for all string values.
@@ -91,35 +86,30 @@ pub fn apply_translations(
 pub fn gather_translations(
     source: &Value,
     mut target: &mut Map<String, Value>,
-    key: Option<&String>,
+    key: &String,
     target_lang: &str,
     translations: &mut HashMap<String, String>,
 ) {
     match source {
         Value::Object(value) => {
-            if let Some(key) = key {
-                if target.get(key).is_none() {
-                    target.insert(key.to_owned(), json!({}));
-                }
-                target = target.get_mut(key).unwrap().as_object_mut().unwrap()
-            }
+            target = extract_or_instantiate_object_under_key(target, key);
 
             for (key, v) in value.iter() {
-                gather_translations(v, &mut target, Some(key), target_lang, translations)
+                gather_translations(v, &mut target, key, target_lang, translations)
             }
         }
-        Value::String(value) => match target.get(&key.unwrap().to_owned()) {
+        Value::String(value) => match target.get(key) {
             None => {
-                translations.insert(value.clone(), "".to_string());
+                translations.insert(value.clone(), String::default());
             }
             Some(target_value) => {
+                let target_value = target_value.as_str().expect(format!("Value {target_value} is not a String").as_str());
                 translations.insert(value.clone(), target_value.to_string());
             }
         },
         _ => {}
     }
 }
-
 
 /// Translates all missing entries in the provided `translations` map.
 ///
@@ -143,25 +133,76 @@ pub async fn perform_translations(
     let mut phrases = vec![];
 
     for (phrase, translated_phrase) in translations.iter() {
-        if *translated_phrase == String::from("") {
+        if *translated_phrase == String::default() {
             phrases.push(phrase.to_owned());
         }
     }
 
-    let batch_size = 128;
-    while phrases.len() > 0 {
-        let mut batch = phrases
-            .splice(0..min(phrases.len(), batch_size), vec![])
-            .collect();
 
-        let mut translated = translate_phrases(&batch, target_lang).await?;
+    let mut stream = translate_stream(phrases, target_lang.to_string());
+    while let Some((phrase,translated_phrase)) = stream.next().await {
+        translations.insert(phrase, translated_phrase);
+    }
+    Ok(())
+}
 
-        for _ in 0..translated.len() {
-            translations.insert(batch.pop().unwrap(), translated.pop().unwrap());
-        }
+/// Returns a mutable reference to a JSON object stored under the given `key`.
+///
+/// If the key does not exist in `target`, a new empty JSON object is inserted.
+/// If the key exists but the value is not a JSON object, it will be replaced
+/// with a new empty object.
+///
+/// If `key` is empty, the function returns `target` unchanged.
+///
+/// # Behavior
+///
+/// - Ensures that `target[key]` exists and is a JSON object.
+/// - Overwrites non-object values under the key.
+/// - Never returns `None`.
+///
+/// # Arguments
+///
+/// * `target` - The parent JSON object (`serde_json::Map`) to operate on.
+/// * `key` - The key under which an object should exist.
+///
+/// # Returns
+///
+/// A mutable reference to the JSON object stored under `key`,
+/// or to `target` itself if `key` is empty.
+///
+/// # Example
+///
+/// ```rust
+/// use serde_json::{Map, Value};
+///
+/// let mut root = Map::new();
+///
+/// let child = extract_or_instantiate_object_under_key(
+///     &mut root,
+///     &"config".to_string(),
+/// );
+///
+/// child.insert("enabled".to_string(), Value::Bool(true));
+///
+/// assert!(root["config"].is_object());
+/// ```
+fn extract_or_instantiate_object_under_key<'a>(
+    target: &'a mut Map<String, Value>,
+    key: &String,
+) -> &'a mut Map<String, Value> {
+    if key.is_empty() {
+        return target;
     }
 
-    Ok(())
+    let value = target
+        .entry(key.to_owned())
+        .or_insert_with(|| Value::Object(Map::new()));
+
+    if !value.is_object() {
+        *value = Value::Object(Map::new());
+    }
+
+    value.as_object_mut().unwrap()
 }
 
 /// Inserts a key–value pair into a [`serde_json::Map`] at the given position.
@@ -194,11 +235,11 @@ pub async fn perform_translations(
 /// let keys: Vec<_> = map.keys().cloned().collect();
 /// assert_eq!(keys, vec!["a", "x", "b"]);
 /// ```
-fn insert_at(map: &mut Map<String, Value>, index: usize, key: String, value: Value) {
+fn insert_at(map: &mut Map<String, Value>, index: usize, key: &String, value: Value) {
     let old = std::mem::take(map);
 
     let mut entries: Vec<_> = old.into_iter().collect();
-    entries.insert(index, (key, value));
+    entries.insert(index, (key.to_owned(), value));
 
     *map = entries.into_iter().collect();
 }

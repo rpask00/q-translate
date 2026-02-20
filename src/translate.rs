@@ -1,4 +1,5 @@
 use dotenv::dotenv;
+use futures::stream::{self, Stream, StreamExt};
 use reqwest::Client;
 use serde::Deserialize;
 use std::env;
@@ -57,9 +58,9 @@ struct Translation {
 /// ```
 
 pub async fn translate_phrases(
-    texts: &Vec<String>,
+    phrases: &Vec<String>,
     target_lang: &str,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
     dotenv().ok();
 
     let api_key = env!("GOOGLE_TRANSLATE_API_KEY");
@@ -71,7 +72,7 @@ pub async fn translate_phrases(
         ("target", target_lang.to_string()),
     ];
 
-    for text in texts {
+    for text in phrases {
         params.push(("q", text.to_owned()));
     }
 
@@ -84,10 +85,59 @@ pub async fn translate_phrases(
         .json::<TranslateResponse>()
         .await?;
 
-    let translations = response.data.translations
-        .into_iter()
-        .map(|t| t.translated_text)
+    let translation_pairs: Vec<(String, String)> = phrases
+        .iter()
+        .cloned()
+        .zip(
+            response
+                .data
+                .translations
+                .into_iter()
+                .map(|t| t.translated_text),
+        )
         .collect();
 
-    Ok(translations)
+    Ok(translation_pairs)
+}
+
+
+/// Translates a collection of phrases into the target language using a concurrent stream.
+///
+/// This function optimizes API usage by:
+/// * **Batching**: Grouping phrases into chunks of 128 (Google API limit).
+/// * **Concurrency**: Executing up to 5 translation requests simultaneously.
+/// * **Ordering**: Uses `buffer_unordered` for maximum throughput; results are emitted as soon as they are ready.
+///
+/// # Arguments
+/// * `phrases` - A vector of strings to be translated.
+/// * `target_lang` - Target language code (e.g., "en", "pl").
+///
+/// # Returns
+/// A `Stream` of `(original, translated)` string pairs. If a batch fails,
+/// the second element will contain `"Error"`.
+pub fn translate_stream(
+    phrases: Vec<String>,
+    target_lang: String,
+) -> impl Stream<Item = (String, String)> {
+    let mut it = phrases.into_iter();
+
+    let mut chunks = Vec::new();
+    while it.as_slice().len() > 0 {
+        let chunk: Vec<String> = it.by_ref().take(128).collect();
+        chunks.push(chunk);
+    }
+    stream::iter(chunks)
+        .map(move |chunk| {
+            let lang = target_lang.clone();
+            async move {
+                translate_phrases(&chunk, &lang).await.unwrap_or_else(|_| {
+                    chunk
+                        .into_iter()
+                        .map(|s| (s, "Error".to_string()))
+                        .collect()
+                })
+            }
+        })
+        .buffer_unordered(5)
+        .flat_map(stream::iter)
 }
